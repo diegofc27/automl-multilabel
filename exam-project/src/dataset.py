@@ -24,7 +24,7 @@ class Dataset():
         
         # Get path
         absolute_path = os.getcwd()
-        full_path = absolute_path + "\\datasets\\" + self.dataset_name + ".arff"
+        full_path = os.path.join(absolute_path, "datasets", self.dataset_name+".arff")
         
         # Read file
         with open(full_path, 'r') as f:
