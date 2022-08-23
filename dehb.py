@@ -110,8 +110,10 @@ class DE(object):
         mode = "max",
         rs: np.random.RandomState=None,
         bound_control = "random",
-        save_path=".") -> None:
+        save_path : Union[str, None] =".",
+        save_freq=10) -> None:
 
+        assert 0 <= crossover_prob <= 1, ValueError("crossover_prob given is not a probability")
         assert 0 <= mutation_factor <= 2, ValueError("mutation_factor not in range [0, 2]")
         assert mode in ["min", "max"], ValueError("Valid optimization mode in ['min', 'max']")
         
@@ -122,7 +124,8 @@ class DE(object):
         self.mode = mode
         self.rs = rs
         self.bound_control = bound_control
-        self.save_path=save_path
+        self.save_path = save_path
+        self.save_freq = save_freq
         
         self.traj = []
         self.inc_config = None
@@ -161,10 +164,15 @@ class DE(object):
                 self.inc_score = score
 
             fitness.append(score)
-            
+            # trajectory updated at every fn eval, regardless of save_freq
             self.traj.append(self.inc_score)
-            self._update_history(candidate, result, budget)
+
             self._eval_counter += 1
+
+            # Update history and wrtie data every 'save_freq' objective fn evaluations
+            if self._eval_counter % self.save_freq == 0:
+                self._update_history(candidate, result, budget)
+                self.save_data()
 
         return np.asarray(fitness)
 
@@ -204,7 +212,8 @@ class DE(object):
         for i in range(pop_size):
             condition = {
                 "max" : children_fitness[i] >= fitness[i],
-                "min" : children_fitness[i] <= fitness[i]}
+                "min" : children_fitness[i] <= fitness[i]
+                }
             if condition[self.mode]:
                 population[i] = children[i]
                 fitness[i] = children_fitness[i]
@@ -286,8 +295,9 @@ class DE(object):
             "history" : self.histroy,
         }
 
-        with open(os.path.join(self.save_path, "data.json"), "w") as outfile:
-            json.dump(data, outfile)
+        if self.save_path is not None:
+            with open(os.path.join(self.save_path, "data.json"), "w") as outfile:
+                json.dump(data, outfile)
     
     def _init_params(self):
         params = {
@@ -335,17 +345,18 @@ class DEHB(DE):
         self._genus = None
     
     def _get_bracket(self):
+        # max num of eliminations in a bracket 
         s_max = int(np.floor(np.log(self.max_budget / self.min_budget) / np.log(self.eta)))
 
-        budgets = (self.max_budget * np.power(self.eta,-np.linspace(start=s_max, stop=0, num=s_max + 1))).tolist()
-        budgets = list(map(int, budgets))
-        
-        N = int(np.ceil(self.eta ** s_max))
-        n_configs = [max(int(N*(self.eta**(-i))), 1) for i in range(s_max + 1)]
+        # num of downsampling left at stage i in range(s_max + 1)
+        n_downsampling = np.linspace(start=s_max, stop=0, num=s_max + 1)
 
-        bracket = tuple(zip(n_configs, budgets))
+        budgets = (self.max_budget * np.power(self.eta, -n_downsampling)).tolist()
+        n_configs = (np.power(self.eta, n_downsampling)).tolist()
+
+        bracket = tuple((int(n), int(b)) for n, b in zip(n_configs, budgets))
         return bracket
-    
+
     def _init_eval_genus(self, obj : Callable, **kwargs):
         genus = dict()
 
@@ -453,7 +464,6 @@ class DEHB(DE):
             "eta"  : self.eta
         }
         params.update(super()._init_params())
-        print(params)
         return params
 
     @property
