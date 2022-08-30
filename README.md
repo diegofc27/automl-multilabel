@@ -1,13 +1,20 @@
-# AutoML multilabel
-Refer to the [pdf](./project_automl_multilabel.pdf) for details on the assignment.
+# End to end deep multilabel clasiffication
 
-We have handled the minimum of data retrieval and basic prepreocessing to get the
-baseline `RandomForest` to run and all of this is contained in [`data.py`](./data.py).
+### Description
+------------
+End to end system for multilabel clasiffication using ResNet blocks and Differential Evolution Hyperband
 
-To run the baseline, ensure you are in this directory and run:
+### Usage
+------------
+
+To run the ResNet with DEHB and run:
 ```bash
-$ python baseline.py
->
+$ python main.py --dataset 40589 --min_budget 25 --max_budget 500 --min 55
+>Validation F1: 0.5034917192288638
+>Final Test F1: 0.5660981368761254
+```
+List of avalible datasets
+```bash
 birds       0.132177
 emotions    0.624649
 enron       0.154276
@@ -19,6 +26,3 @@ scene       0.692282
 slashdot    0.233592
 yeast       0.326794
 ```
-
-In here you can see how to load in the data and pass it to a model, the rest is up to you!
-# automl-multilabel

@@ -9,3 +9,7 @@ pandas
 skorch
 notebook
 keras
+rtdl
+libzero==0.0.4
+wandb
+ConfigSpace

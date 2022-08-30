@@ -9,6 +9,7 @@ import pandas as pd
 from openml import OpenMLDataset
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
+import torch 
 
 task_ids = (
     40588,
@@ -122,6 +123,24 @@ class Dataset:
             openml=dataset,
             encoders=encoders,
         )
+
+
+class MyDataset(Dataset):
+ 
+  def __init__(self,split):
+ 
+    x=np.array(split.X)
+    y=np.array(split.y)
+ 
+    self.x_train=torch.tensor(x,dtype=torch.float32)
+    self.y_train=torch.tensor(y,dtype=torch.float32)
+ 
+  def __len__(self):
+    return len(self.y_train)
+   
+  def __getitem__(self,idx):
+    return self.x_train[idx],self.y_train[idx]
+
 
 
 if __name__ == "__main__":

@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 
 import numpy as np
@@ -27,7 +28,7 @@ if __name__ == "__main__":
         dataset = Dataset.from_openml(id)
         print(f"Training on {dataset.name}")
 
-        train, test = dataset.split(splits=(0.75, 0.25), seed=seed)
+        train, test = dataset.split(splits=(0.80, 0.20), seed=seed)
         rf = RandomForestBaseline(seed=seed)
 
         rf.fit(train.X, train.y)
