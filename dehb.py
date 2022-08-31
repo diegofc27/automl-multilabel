@@ -2,13 +2,13 @@ import json
 import os
 import time
 from typing import Callable, Union
-from config import SEED
-
 
 import ConfigSpace
 import numpy as np
 from ConfigSpace.util import (deactivate_inactive_hyperparameters,
                               impute_inactive_values)
+
+SEED = 42
 
 
 class ConfigVectorSpace(ConfigSpace.ConfigurationSpace):
@@ -24,7 +24,15 @@ class ConfigVectorSpace(ConfigSpace.ConfigurationSpace):
             # maps hyperparameter name to positional index in vector form
             self.name_to_idx[hp.name] = i
         
-    def sample_vectors(self, size):
+    def sample_vectors(self, size: int):
+        """Sample from config space 'size' many vectors
+
+        Args:
+            size (int): Number of vectors to sample
+
+        Returns:
+            list: A list of vectors
+        """
         configurations = super().sample_configuration(size)
         if not isinstance(configurations , list):
             configurations = [configurations]
@@ -33,11 +41,14 @@ class ConfigVectorSpace(ConfigSpace.ConfigurationSpace):
         return vectors
     
     def _to_vector(self, config: ConfigSpace.Configuration) -> np.array:
-        '''Converts ConfigSpace.Configuration object to numpy array scaled to [0,1]
+        """Converts ConfigSpace.Configuration object to numpy array scaled to [0,1]
         Works when self is a ConfigVectorSpace object and the input config is a ConfigSpace.Configuration object.
         Handles conditional spaces implicitly by replacing illegal parameters with default values
         to maintain the dimensionality of the vector.
-        '''        
+
+        Returns:
+            np.ndarray: single configuration vector
+        """
         config = impute_inactive_values(config)
 
         vector = [None] * self.dim
@@ -61,10 +72,13 @@ class ConfigVectorSpace(ConfigSpace.ConfigurationSpace):
                     vector[idx] = (config[name] - bounds[0]) / (bounds[1] - bounds[0])
         return np.array(vector)
     
-    def to_config(self, vector: np.array) -> ConfigSpace.Configuration:
-        '''Converts numpy array to ConfigSpace.Configuration object
+    def to_config(self, vector: np.ndarray) -> ConfigSpace.Configuration:
+        """Converts numpy array to ConfigSpace.Configuration object
         Works when self is a ConfigVectorSpace object and the input vector is in the domain [0, 1].
-        '''
+
+        Returns:
+            ConfigSpace.Configuration : A configuration
+        """
         # creates a ConfigSpace object dict with all hyperparameters present, the inactive too
         new_config = impute_inactive_values(self.sample_configuration()).get_dictionary()
 
@@ -110,7 +124,7 @@ class DE(object):
         mode = "max",
         rs: np.random.RandomState=None,
         bound_control = "random",
-        save_path : Union[str, None] ="./history_data.json",
+        save_path : Union[str, None] ="./data.json",
         save_freq=10) -> None:
 
         assert 0 <= crossover_prob <= 1, ValueError("crossover_prob given is not a probability")
@@ -139,12 +153,34 @@ class DE(object):
         self._iteration_counter = -1
 
     def _init_population(self, pop_size : int) -> np.ndarray :
+        """Initialize a population with randomly sampled vectors
 
+        Args:
+            pop_size (int): Size of a population
+
+        Returns:
+            np.ndarray: A 2D vector of shape (pop_size, space.dim)
+        """
         # sample from ConfigSpace s.t. conditional constraints (if any) are maintained
         population = self.space.sample_vectors(size=pop_size)
         return np.asarray(population)
     
-    def _eval_population(self, obj : Callable, population: Union[np.ndarray, list] , budget, **kwargs) -> np.ndarray:
+    def _eval_population(self, obj : Callable, population: Union[np.ndarray, list] , budget : int, **kwargs) -> np.ndarray:
+        """Evaluate each candidate in population. The incumbent config is identified.
+
+        Args:
+            obj (Callable): The black-box objective function
+            population (Union[np.ndarray, list]): A list of configuration vectors
+            budget (int): The budget to forward to the objective function obj
+
+        Raises:
+            StopIteration: Is handled in self.optimize. Raised when
+                the limit of DEHB execution is reached.
+
+        Returns:
+            np.ndarray: A vecto of shape (pop_size, 1) with fitess score of 
+                each evaluated configuration.
+        """
         fitness = []
 
         for candidate in population:
@@ -184,7 +220,14 @@ class DE(object):
 
         return np.asarray(fitness)
 
-    def _update_history(self, candidate, result, budget):
+    def _update_history(self, candidate : np.ndarray, result: dict, budget: int):
+        """Update the record of evaluated cadidates, results and other info
+
+        Args:
+            candidate (np.ndarray): A configuration vector
+            result (dict): The dictionray returned by objective function
+            budget (int): The budget the vector was executed for
+        """
         record = {
             "candidate": candidate.tolist(),
             "budget": budget}
@@ -192,11 +235,30 @@ class DE(object):
         record.update(result)
         self.histroy.append(record)
 
-    def _sample(self, population, size, replace=False):
+    def _sample(self, population: np.ndarray, size: int, replace=False) -> np.ndarray:
+        """Sample from an existing population
+
+        Args:
+            population (np.ndarray): A 2D array of configuration vectors
+            size (int): The number vectors to be sampled
+            replace (bool, optional): Whether to sample with replacement or not. Defaults to False.
+
+        Returns:
+            nd.ndarray: A subset of pupulation
+        """
+
         selection = self.rs.choice(np.arange(len(population)), size, replace=replace)
         return population[selection]
 
-    def _mutation(self, population: np.ndarray):
+    def _mutation(self, population: np.ndarray) -> np.ndarray:
+        """Perform rand/1 mutation operation
+
+        Args:
+            population (np.ndarray): space to sample base vectors of mutant
+
+        Returns:
+            np.ndarray: A single mutant vector of shape (space.dim, 1)
+        """
         pop_size = len(population)
         assert pop_size > self._min_pop_size, ValueError(f"Population too small ( < DE()._min_pop_size = {self._min_pop_size}) for mutation")
 
@@ -207,6 +269,16 @@ class DE(object):
         return mutant
 
     def _crossover(self, candidate: np.ndarray, mutant: np.ndarray) -> np.ndarray:
+        """Perform binary crossover by replacing mutant's compenent values with crossover 
+        probability by candidate value
+
+        Args:
+            candidate (np.ndarray): A parent configuration vector
+            mutant (np.ndarray): A mutant configuration vector
+
+        Returns:
+            np.ndarray: A child of shape (space.dim, 1)
+        """
         # Sample a random value from U[0, 1] for every dimension
         p = self.rs.rand(self.space.dim)
 
@@ -215,7 +287,19 @@ class DE(object):
         return child
     
     def _selection(self, population: np.ndarray, children: np.ndarray, fitness: np.ndarray, children_fitness: np.ndarray):
-        # Conduct parent-child competition and select new population 
+        """Conduct parent-child competition. 
+
+        Args:
+            population (np.ndarray): A 2D array of configuration vectors
+            children (np.ndarray): A 2D array of configuration vectors corresoinding to
+                each parent in population 
+            fitness (np.ndarray): A fitness score of each parent in population.
+            children_fitness (np.ndarray): A fitness score of each child in children.
+
+        Returns:
+            (np.ndarray, np.ndarray): New generation of population and corresponding 
+                fitness scores.
+        """
         pop_size = len(population)
         for i in range(pop_size):
             condition = {
@@ -229,6 +313,14 @@ class DE(object):
         return population, fitness
     
     def _check_bounds(self, vector: np.ndarray) -> np.ndarray:
+        """Correct for config vector components that exceeds valid range (0,1)
+
+        Args:
+            vector (np.ndarray): A configuration vector
+
+        Returns:
+            np.ndarray: A probably corrected configuration vector
+        """
 
         violations = np.where((vector > 1) | (vector < 0))[0]
         if len(violations) == 0:
@@ -240,7 +332,18 @@ class DE(object):
             vector[violations] = np.clip(vector[violations], a_min=0, a_max=1)
         return vector
 
-    def _next_generation(self, population, alt_pop=None):
+    def _next_generation(self, population: np.ndarray, alt_pop: Union[np.ndarray, None]=None):
+        """Generate next generation of population through mutation, crossover
+            and selection operation.
+
+        Args:
+            population (np.ndaray): A 2D array of configuration vectors
+            alt_pop (Union[np.ndarray, None], optional): An alternate population
+                for sampling base vectors for mutation operation. Defaults to None.
+
+        Returns:
+            np.ndarray: A 2D array of evolved population of configuration vectors
+        """
         children = []
 
         for candidate in population:
@@ -253,6 +356,18 @@ class DE(object):
         return children
 
     def optimize(self, obj : Callable, budget=None, pop_size : Union[int,None] = None, limit: int = 10, unit : str = "iter", **kwargs):
+        """Perform optimization of objective function subject to the specified limits.
+
+        Args:
+            obj (Callable): A black-box objective function
+            budget (_type_, optional): A budget to execute the objective function at. Defaults to None.
+            pop_size (Union[int,None], optional): size of maintained population. Defaults to None.
+            limit (int, optional): optimizaiton stop limit. Defaults to 10.
+            unit (str, optional): optimizaiton stop condition. Defaults to "iter".
+
+        Returns:
+            _type_: _description_
+        """
         self._set_limit(limit, unit)
 
         if pop_size is None:
@@ -305,6 +420,9 @@ class DE(object):
             return self._iteration_counter >= self.limit
 
     def save_data(self):
+        """Save the history of evaluations, incumbent trajectory and other optimization related
+            parameters to a json file
+        """
         data = {
             "params" : self._init_params(),
             "result" : {
@@ -374,6 +492,12 @@ class DEHB(DE):
         self._genus = None
     
     def _get_bracket(self):
+        """Compute a full bracket of SH iteration. All brackets
+        that will be executed can be extracted as a slice of full bracket.
+
+        Returns:
+            tuple: A sequence of tuple of the form ((n_configs, budget_per_config), ...)
+        """
         # max num of eliminations in a bracket 
         s_max = int(np.floor(np.log(self.max_budget / self.min_budget) / np.log(self.eta)))
 
@@ -387,6 +511,15 @@ class DEHB(DE):
         return bracket
 
     def _init_eval_genus(self, obj : Callable, **kwargs):
+        """Initialize and evaluate the genus. A genus is a dictiontay that holds
+        every population and corresponding fitness scores mangaed by DEHB, indexed by budget.
+
+        Args:
+            obj (Callable): A black-box objective funciton
+
+        Returns:
+            dict: All population with budget as key. 
+        """
         genus = dict()
 
         for (pop_size, budget) in self._all_in_one:
@@ -398,7 +531,15 @@ class DEHB(DE):
             genus[budget] = self._sort_species(species)
         return genus
     
-    def _sort_species(self, species : np.ndarray):
+    def _sort_species(self, species : dict):
+        """Sort the species on the basis of fitness score
+
+        Args:
+            species (dict): A single population and corresponding fitness 
+
+        Returns:
+            dict: An ordered populalation and fitness score
+        """
         species = species.copy()
         ranking = np.argsort(species["fitness"])
         if self.mode == "max":
@@ -410,6 +551,18 @@ class DEHB(DE):
         return species
 
     def _select_promotions(self, target : dict, previous : dict):
+        """Select the top performers from previous species to be promoted as children
+        of target species. If individuals in previous already in target, then next best individual
+        in previous. 
+
+        Args:
+            target (dict): A species associated to higher budget
+            previous (dict): A species associated to lower budget
+
+        Returns:
+            np.ndarray: A 2D array of shape (len(target), shape.dim) with promoted 
+                configuration vectors.
+        """
         promotions = []
         pop_size = len(target["population"])
 
@@ -431,7 +584,17 @@ class DEHB(DE):
         return np.asarray(promotions)
     
     def _get_alt_population(self, target : dict, previous : dict):
+        """To generate an alternate population for sampling base vectors for mutation
+        operation.
 
+        Args:
+            target (dict): A species associated to higher budget
+            previous (dict): A species associated to lower budget
+
+        Returns:
+            np.ndarray: A 2D array of shape (len(target), shape.dim), with an
+                alternate population
+        """
         # stage == 0, previous is None
         if previous is None:
             
@@ -454,6 +617,16 @@ class DEHB(DE):
         return alt_pop
     
     def optimize(self, obj : Callable, limit : int = 10, unit : str = "iter", **kwargs):
+        """Optimize the objective function until the specified limit is reached
+
+        Args:
+            obj (Callable): _description_
+            limit (int, optional): optimizaiton stop limit. Defaults to 10.
+            unit (str, optional): optimizaiton stop condition. Defaults to "iter".
+
+        Returns:
+            dict: The best configuration yet
+        """
         self._set_limit(limit, unit)
 
         try:
@@ -499,8 +672,10 @@ class DEHB(DE):
 
     @property
     def global_pupulation(self):
+        """Pool population of all species together
+
+        Returns:
+            _type_: _description_
+        """
         assert self.genus is not None, AssertionError("No populaiton in genus initialized")
         return np.concatenate([species["population"] for species in self.genus.values()])
-
-
-
