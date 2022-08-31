@@ -2,13 +2,13 @@ import json
 import os
 import time
 from typing import Callable, Union
+from config import SEED
+
 
 import ConfigSpace
 import numpy as np
 from ConfigSpace.util import (deactivate_inactive_hyperparameters,
                               impute_inactive_values)
-
-SEED = 42
 
 
 class ConfigVectorSpace(ConfigSpace.ConfigurationSpace):

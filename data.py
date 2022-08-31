@@ -10,6 +10,7 @@ from openml import OpenMLDataset
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 import torch 
+from config import SEED
 
 task_ids = (
     40588,
@@ -72,7 +73,7 @@ class Dataset:
 
         for size in sample_sizes[:-1]:
             xs, next_xs, ys, next_ys = train_test_split(
-                next_xs, next_ys, train_size=size, random_state=seed
+                next_xs, next_ys, train_size=size, random_state=SEED
             )
             collected_splits.append(Split(X=xs, y=ys))
         collected_splits.append(Split(X=next_xs, y=next_ys))

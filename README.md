@@ -4,25 +4,41 @@
 ------------
 End to end system for multilabel clasiffication using ResNet blocks and Differential Evolution Hyperband
 
-### Usage
+### Requirements
+------------
+In a conda or virtual env, install the requirements.
+
+`pip install -r requirements.txt`
+
+### Usage (how to reproduce results)
 ------------
 
 To run the ResNet with DEHB and run:
 ```bash
-$ python main.py --dataset 40589 --min_budget 25 --max_budget 500 --min 55
->Validation F1: 0.5034917192288638
->Final Test F1: 0.5660981368761254
+$ python main.py --dataset 40589 --min_budget 20 --max_budget 400 --min 55
+>Validation F1: 0.634457385678587
+>Final Test F1: 0.650024360748846
 ```
-List of avalible datasets
+List of command line arguments
 ```bash
-birds       0.132177
-emotions    0.624649
-enron       0.154276
-genbase     0.716049
-image       0.471796
-langLog     0.007548
-reuters     0.549591
-scene       0.692282
-slashdot    0.233592
-yeast       0.326794
+--dataset     dataset id
+--min_budget  minimum number of epochs for DEHB
+--max_budget  maximum number of epochs for DEHB
+--min         number of minutes DEHB has to get the best configuration 
+```
+
+
+List of available datasets
+```bash
+name        id
+birds       40588
+emotions    40589
+enron       40590
+genbase     40591
+image       40592
+langLog     40593
+reuters     40594
+scene       40595
+slashdot    40596
+yeast       40597
 ```

@@ -3,6 +3,8 @@ import numpy as np
 import math
 import time
 from sklearn import preprocessing
+from config import SEED
+
 
 def dataset_num_to_id(dataset_number):
     dataset_ids = [40590, 40591, 40592, 40593, 40594, 40595, 40596, 40597, 40588, 40589]
@@ -12,7 +14,7 @@ def dataset_num_to_id(dataset_number):
 class OpenMlDataset():
     def __init__(self, dataset_id, threshold = 0.9, normalization_type="standard", split=0.75, seed=0) -> None:
         self.dataset_id = dataset_id
-        self.random_generator = np.random.RandomState(seed)
+        self.random_generator = np.random.RandomState(SEED)
         self.split = split
         self.load_dataset()
         self.pred_preprocessing = PredictorsPreprocessingModule(self.pred_data, self.pred_categorical_indicator, correlation_threshold=threshold, normalization_type=normalization_type)

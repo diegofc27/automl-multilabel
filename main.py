@@ -1,91 +1,20 @@
-
-import dataset
 import numpy as np
 import time
 import torch
 from torch import nn
 from dehb import DEHB,ConfigVectorSpace,ConfigSpace
-from dataset import OpenMlDataset, CrossValidation,Split
+from dataset import OpenMlDataset,Split
 from data import MyDataset
-from utils import train,test
+from utils import train,test,obj
 from torch.utils.data import DataLoader
 import rtdl
-import wandb
 import argparse
-
+import os
+from config import SEED
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-
-def obj(x,budget,**kwargs):
-
-    seed = 42
-    dataset = kwargs['dataset']
-    
-    cross_validation = CrossValidation(pred_data=dataset.train_pred_data, target_data=dataset.train_tar_data, split_num=3)
-
-    score_tests = np.array([])
-
-    for i, (tp, tt, vp, vt) in enumerate(cross_validation):
-        loss_fn = nn.BCEWithLogitsLoss()
-
-
-        train_split = Split(x=tp,y=tt)
-        validation_split = Split(x=vp,y=vt)
-
-        
-        train_dataset = MyDataset(train_split)
-        test_dataset = MyDataset(validation_split)
-
-        
-        train_dataloader = DataLoader(train_dataset, batch_size=256)
-        test_dataloader = DataLoader(test_dataset, batch_size=256)
-
-        n_inputs, n_outputs = tp.shape[1], tt.shape[1]
-
-        config = { "d_in":n_inputs,
-        "n_blocks":x["n_blocks"],
-        "d_main":x["d_main"],
-        "d_hidden":x["d_hidden"],
-        "dropout_first":x["dropout_first"],
-        "dropout_second":x["dropout_second"],
-        "d_out":n_outputs}
-
-        model = rtdl.ResNet.make_baseline(**config).to(device)  
-
-        config["batch_size"] = 256
-        config["epoch"] = budget
-        config["weight_decay"] = x['weight_decay']
-
-        optimizer = torch.optim.AdamW(model.parameters(), lr=x["lr"], weight_decay=x['weight_decay'])
-        #Only save the first run
-        if i==0:
-          with wandb.init(
-                  project="multilabel",
-                  config=config,
-                  group=str(dataset.dataset_id),
-                  reinit=True,
-                  mode="offline",
-                  settings=wandb.Settings(start_method="thread")):
-
-              for t in range(budget):
-                  train(train_dataloader, model, loss_fn, optimizer,ftt=False,dataset_test=test_dataloader)
-                  score_test = test(test_dataloader,model, loss_fn,ftt=False)
-                  wandb.log({"val/f1_score": score_test})
-
-              score_tests = np.append(score_tests,score_test)
-        else:
-            for t in range(budget):
-                  train(train_dataloader, model, loss_fn, optimizer,ftt=False,dataset_test=test_dataloader)
-                  score_test = test(test_dataloader,model, loss_fn,ftt=False)
-
-            score_tests = np.append(score_tests,score_test)
-
-    print(config)
-    print("Mean f1 score of configuration: " + str(np.mean(score_tests)))
-    return {'mean_F1':np.mean(score_tests), 'std_F1':np.std(score_tests)}
-
-SEED = 42
+seed = SEED
 
 #Get params
 parser = argparse.ArgumentParser()
@@ -151,9 +80,12 @@ model = rtdl.ResNet.make_baseline(**config).to(device)
 optimizer = torch.optim.AdamW(model.parameters(), lr= dehb.inc_config['lr'], weight_decay=dehb.inc_config['weight_decay'])
 budget = dehb.inc_config['budget']
 for t in range(budget):
-  train(train_dataloader, model, loss_fn, optimizer,ftt=False,dataset_test=test_dataloader)
+  train(train_dataloader, model, loss_fn, optimizer)
 
 #Calculate final F1 test score
-score_test = test(test_dataloader,model, loss_fn,ftt=False)
+score_test = test(test_dataloader,model)
 print(f"Final Test F1: {score_test}")
+
+#Save best model
+torch.save(model.state_dict(), os.path.join(os.path.abspath(os.getcwd()),'model/best.pth'))
 

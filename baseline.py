@@ -6,11 +6,13 @@ import pandas as pd
 from data import Dataset, task_ids
 from metrics import f1_score
 from sklearn.ensemble import RandomForestClassifier
+from config import SEED
+
 
 
 class RandomForestBaseline:
     def __init__(self, seed: int | None = 1):
-        self.seed = seed
+        self.seed = SEED
         self.estimator = RandomForestClassifier(random_state=seed)
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> None:
@@ -21,7 +23,7 @@ class RandomForestBaseline:
 
 
 if __name__ == "__main__":
-    seed = 42
+    seed = SEED
     scores: dict[str, float] = {}
 
     for id in task_ids:
