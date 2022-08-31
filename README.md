@@ -1,8 +1,8 @@
-# End to end deep multilabel clasiffication
+# End to end deep multilabel classification
 
 ### Description
 ------------
-End to end system for multilabel clasiffication using ResNet blocks and Differential Evolution Hyperband
+End to end system for multilabel classification using ResNet blocks and Differential Evolution Hyperband
 
 ### Requirements
 ------------
