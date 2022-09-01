@@ -23,7 +23,7 @@ class ConfigVectorSpace(ConfigSpace.ConfigurationSpace):
         for i, hp in enumerate(self.hyperparameters):
             # maps hyperparameter name to positional index in vector form
             self.name_to_idx[hp.name] = i
-        
+
     def sample_vectors(self, size: int):
         """Sample from config space 'size' many vectors
 
@@ -34,12 +34,12 @@ class ConfigVectorSpace(ConfigSpace.ConfigurationSpace):
             list: A list of vectors
         """
         configurations = super().sample_configuration(size)
-        if not isinstance(configurations , list):
+        if not isinstance(configurations, list):
             configurations = [configurations]
 
         vectors = [self._to_vector(config) for config in configurations]
         return vectors
-    
+
     def _to_vector(self, config: ConfigSpace.Configuration) -> np.array:
         """Converts ConfigSpace.Configuration object to numpy array scaled to [0,1]
         Works when self is a ConfigVectorSpace object and the input config is a ConfigSpace.Configuration object.
@@ -71,13 +71,13 @@ class ConfigVectorSpace(ConfigSpace.ConfigurationSpace):
                 else:
                     vector[idx] = (config[name] - bounds[0]) / (bounds[1] - bounds[0])
         return np.array(vector)
-    
+
     def to_config(self, vector: np.ndarray) -> ConfigSpace.Configuration:
         """Converts numpy array to ConfigSpace.Configuration object
         Works when self is a ConfigVectorSpace object and the input vector is in the domain [0, 1].
 
         Returns:
-            ConfigSpace.Configuration : A configuration
+            ConfigSpace.Configuration: A configuration
         """
         # creates a ConfigSpace object dict with all hyperparameters present, the inactive too
         new_config = impute_inactive_values(self.sample_configuration()).get_dictionary()
@@ -88,10 +88,10 @@ class ConfigVectorSpace(ConfigSpace.ConfigurationSpace):
 
             if type(hyper) == ConfigSpace.OrdinalHyperparameter:
                 ranges = np.arange(start=0, stop=1, step=1/len(hyper.sequence))
-                param_value = hyper.sequence[np.where((vector[idx] < ranges) == False)[0][-1]]
+                param_value = hyper.sequence[np.where((vector[idx] >= ranges))[0][-1]]
             elif type(hyper) == ConfigSpace.CategoricalHyperparameter:
                 ranges = np.arange(start=0, stop=1, step=1/len(hyper.choices))
-                param_value = hyper.choices[np.where((vector[idx] < ranges) == False)[0][-1]]
+                param_value = hyper.choices[np.where((vector[idx] >= ranges))[0][-1]]
             else:  # handles UniformFloatHyperparameter & UniformIntegerHyperparameter
                 # rescaling continuous values
                 if hyper.log:
@@ -105,32 +105,28 @@ class ConfigVectorSpace(ConfigSpace.ConfigurationSpace):
                     param_value = float(param_value)
             new_config[hyper.name] = param_value
 
-        #self.check_configuration(ConfigSpace.Configuration(self, values=new_config))
-        #new_config = impute_inactive_values(ConfigSpace.Configuration(self, values=new_config))
         # the mapping from unit hypercube to the actual config space may lead to illegal
         # configurations based on conditions defined, which need to be deactivated/removed
-        new_config = deactivate_inactive_hyperparameters(
-            configuration = new_config, configuration_space=self
-        )
+        new_config = deactivate_inactive_hyperparameters(configuration=new_config, configuration_space=self)
         return new_config
 
 
 class DE(object):
     def __init__(self,
-        space : ConfigVectorSpace,
-        crossover_prob : float = 0.9,
-        mutation_factor : float = 0.8,
-        metric = "f1_Score",
-        mode = "max",
-        rs: np.random.RandomState=None,
-        bound_control = "random",
-        save_path : Union[str, None] ="./data.json",
-        save_freq=10) -> None:
+                 space: ConfigVectorSpace,
+                 crossover_prob: float = 0.9,
+                 mutation_factor: float = 0.8,
+                 metric="f1_Score",
+                 mode="max",
+                 rs: np.random.RandomState = None,
+                 bound_control="random",
+                 save_path: Union[str, None] = "./data.json",
+                 save_freq=10) -> None:
 
         assert 0 <= crossover_prob <= 1, ValueError("crossover_prob given is not a probability")
         assert 0 <= mutation_factor <= 2, ValueError("mutation_factor not in range [0, 2]")
         assert mode in ["min", "max"], ValueError("Valid optimization mode in ['min', 'max']")
-        
+
         self.space = space
         self.crossover_prob = crossover_prob
         self.mutation_factor = mutation_factor
@@ -140,7 +136,7 @@ class DE(object):
         self.bound_control = bound_control
         self.save_path = save_path
         self.save_freq = save_freq
-        
+
         self.traj = []
         self.runtime = []
         self.inc_config = None
@@ -152,7 +148,7 @@ class DE(object):
         self._eval_counter = 0
         self._iteration_counter = -1
 
-    def _init_population(self, pop_size : int) -> np.ndarray :
+    def _init_population(self, pop_size: int) -> np.ndarray:
         """Initialize a population with randomly sampled vectors
 
         Args:
@@ -164,8 +160,8 @@ class DE(object):
         # sample from ConfigSpace s.t. conditional constraints (if any) are maintained
         population = self.space.sample_vectors(size=pop_size)
         return np.asarray(population)
-    
-    def _eval_population(self, obj : Callable, population: Union[np.ndarray, list] , budget : int, **kwargs) -> np.ndarray:
+
+    def _eval_population(self, obj: Callable, population: Union[np.ndarray, list], budget: int, **kwargs) -> np.ndarray:
         """Evaluate each candidate in population. The incumbent config is identified.
 
         Args:
@@ -178,7 +174,7 @@ class DE(object):
                 the limit of DEHB execution is reached.
 
         Returns:
-            np.ndarray: A vecto of shape (pop_size, 1) with fitess score of 
+            np.ndarray: A vecto of shape (pop_size, 1) with fitess score of
                 each evaluated configuration.
         """
         fitness = []
@@ -191,13 +187,14 @@ class DE(object):
             result = obj(config, budget, **kwargs)
 
             assert isinstance(result, dict), TypeError("Objective function must return a dictionary")
-            assert self.metric in result, KeyError(f"Given mteric '{self.metric}' not found in dictionary {result}, returned by the objective function")
+            assert self.metric in result, KeyError(f"Given mteric '{self.metric}' not found in dictionary \
+                                                    {result}, returned by the objective function")
             score = result[self.metric]
 
             condition = {
-                "min" : score < self.inc_score,
-                "max" : score > self.inc_score, 
-            } 
+                "min": score < self.inc_score,
+                "max": score > self.inc_score,
+            }
 
             config_dict = config.get_dictionary()
             config_dict.update({"budget": budget})
@@ -220,7 +217,7 @@ class DE(object):
 
         return np.asarray(fitness)
 
-    def _update_history(self, candidate : np.ndarray, result: dict, budget: int):
+    def _update_history(self, candidate: np.ndarray, result: dict, budget: int):
         """Update the record of evaluated cadidates, results and other info
 
         Args:
@@ -231,7 +228,7 @@ class DE(object):
         record = {
             "candidate": candidate.tolist(),
             "budget": budget}
-        
+
         record.update(result)
         self.histroy.append(record)
 
@@ -260,7 +257,8 @@ class DE(object):
             np.ndarray: A single mutant vector of shape (space.dim, 1)
         """
         pop_size = len(population)
-        assert pop_size > self._min_pop_size, ValueError(f"Population too small ( < DE()._min_pop_size = {self._min_pop_size}) for mutation")
+        assert pop_size > self._min_pop_size, ValueError(f"Population too small ( < DE()._min_pop_size = \
+                                                          {self._min_pop_size}) for mutation")
 
         base, a, b = self._sample(population, self._min_pop_size)
 
@@ -269,7 +267,7 @@ class DE(object):
         return mutant
 
     def _crossover(self, candidate: np.ndarray, mutant: np.ndarray) -> np.ndarray:
-        """Perform binary crossover by replacing mutant's compenent values with crossover 
+        """Perform binary crossover by replacing mutant's compenent values with crossover
         probability by candidate value
 
         Args:
@@ -285,33 +283,34 @@ class DE(object):
         # perform binomial crossover
         child = np.asarray([mutant[i] if p[i] < self.crossover_prob else candidate[i] for i in range(self.space.dim)])
         return child
-    
-    def _selection(self, population: np.ndarray, children: np.ndarray, fitness: np.ndarray, children_fitness: np.ndarray):
-        """Conduct parent-child competition. 
+
+    def _selection(self, population: np.ndarray, children: np.ndarray,
+                   fitness: np.ndarray, children_fitness: np.ndarray):
+        """Conduct parent-child competition.
 
         Args:
             population (np.ndarray): A 2D array of configuration vectors
             children (np.ndarray): A 2D array of configuration vectors corresoinding to
-                each parent in population 
+                each parent in population
             fitness (np.ndarray): A fitness score of each parent in population.
             children_fitness (np.ndarray): A fitness score of each child in children.
 
         Returns:
-            (np.ndarray, np.ndarray): New generation of population and corresponding 
+            (np.ndarray, np.ndarray): New generation of population and corresponding
                 fitness scores.
         """
         pop_size = len(population)
         for i in range(pop_size):
             condition = {
-                "max" : children_fitness[i] >= fitness[i],
-                "min" : children_fitness[i] <= fitness[i]
+                "max": children_fitness[i] >= fitness[i],
+                "min": children_fitness[i] <= fitness[i]
                 }
             if condition[self.mode]:
                 population[i] = children[i]
                 fitness[i] = children_fitness[i]
-        
+
         return population, fitness
-    
+
     def _check_bounds(self, vector: np.ndarray) -> np.ndarray:
         """Correct for config vector components that exceeds valid range (0,1)
 
@@ -328,11 +327,11 @@ class DE(object):
         if self.bound_control == 'random':
             vector[violations] = self.rs.uniform(low=0.0, high=1.0, size=len(violations))
         else:
-            # Can be exploited by optimizer if solution at clip limits 
+            # Can be exploited by optimizer if solution at clip limits
             vector[violations] = np.clip(vector[violations], a_min=0, a_max=1)
         return vector
 
-    def _next_generation(self, population: np.ndarray, alt_pop: Union[np.ndarray, None]=None):
+    def _next_generation(self, population: np.ndarray, alt_pop: Union[np.ndarray, None] = None):
         """Generate next generation of population through mutation, crossover
             and selection operation.
 
@@ -352,10 +351,15 @@ class DE(object):
             mutant = self._check_bounds(mutant)
             child = self._crossover(candidate, mutant)
             children.append(child)
-        
+
         return children
 
-    def optimize(self, obj : Callable, budget=None, pop_size : Union[int,None] = None, limit: int = 10, unit : str = "iter", **kwargs):
+    def optimize(self,
+                 obj: Callable,
+                 budget=None, pop_size: Union[int, None] = None,
+                 limit: int = 10,
+                 unit: str = "iter",
+                 **kwargs):
         """Perform optimization of objective function subject to the specified limits.
 
         Args:
@@ -371,9 +375,9 @@ class DE(object):
         self._set_limit(limit, unit)
 
         if pop_size is None:
-            pop_size = 10 * self.space.dim # heuristic
+            pop_size = 10 * self.space.dim  # heuristic
 
-        try: 
+        try:
             # Initialize and Evaluate the population
             population = self._init_population(pop_size)
             fitness = self._eval_population(obj, population, budget, **kwargs)
@@ -386,18 +390,18 @@ class DE(object):
 
                 children_fitness = self._eval_population(obj, children, budget)
                 population, fitness = self._selection(population, children, fitness, children_fitness)
-        
+
         except StopIteration:
             return self.inc_config
-    
-    def _set_limit(self, limit : int, unit : str):
+
+    def _set_limit(self, limit: int, unit: str):
         self.limit = limit
         self.unit = unit
         self._start_timer()
-     
+
     def _start_timer(self):
         self._wall_clock_start = time.time()
-    
+
     def _time_elapsed(self):
         # time difference in sec
         diff = time.time() - self._wall_clock_start
@@ -408,9 +412,9 @@ class DE(object):
 
         if self.unit in ["hr", "min", "sec"]:
             scale = {
-                "sec" : 1,
-                "min" : 60,
-                "hr"  : 60 * 60
+                "sec": 1,
+                "min": 60,
+                "hr": 60 * 60
             }
             diff = self._time_elapsed()
             return diff >= self.limit * scale[self.unit]
@@ -424,14 +428,14 @@ class DE(object):
             parameters to a json file
         """
         data = {
-            "params" : self._init_params(),
-            "result" : {
+            "params": self._init_params(),
+            "result": {
                 "best_config": self.inc_config,
-                "best_score" : self.inc_score,
+                "best_score": self.inc_score,
             },
             "traj": self.traj,
             "runtime": self.runtime,
-            "history" : self.histroy,
+            "history": self.histroy,
         }
 
         if self.save_path is not None:
@@ -440,57 +444,58 @@ class DE(object):
             os.makedirs(os.path.dirname(self.save_path), exist_ok=True)
             with open(self.save_path, "w+") as outfile:
                 json.dump(data, outfile)
-    
+
     def _init_params(self):
         params = {
-            "crossover_prob" : self.crossover_prob,
-            "mutation_factor" : self.mutation_factor,
-            "metric" : self.metric,
-            "mode" : self.mode,
-            "seed" : SEED,
-            "bound_control" : self.bound_control,
-            "iters" : self._iteration_counter,
-            "evals" : self._eval_counter
+            "crossover_prob": self.crossover_prob,
+            "mutation_factor": self.mutation_factor,
+            "metric": self.metric,
+            "mode": self.mode,
+            "seed": SEED,
+            "bound_control": self.bound_control,
+            "iters": self._iteration_counter,
+            "evals": self._eval_counter
 
         }
         return params
 
+
 class DEHB(DE):
-    def __init__(self, 
-        space: ConfigVectorSpace,
-        min_budget : int = 10,
-        max_budget : int = 100,
-        eta : int = 2,
-        crossover_prob: float = 0.9, 
-        mutation_factor: float = 0.8, 
-        metric = "f1_score",
-        mode = "max",
-        rs: np.random.RandomState=None,
-        bound_control = "random",
-        save_path : Union[str, None] ="./data.json",
-        save_freq=10) -> None:
+    def __init__(self,
+                 space: ConfigVectorSpace,
+                 min_budget: int = 10,
+                 max_budget: int = 100,
+                 eta: int = 2,
+                 crossover_prob: float = 0.9,
+                 mutation_factor: float = 0.8,
+                 metric: str = "f1_score",
+                 mode: str = "max",
+                 rs: np.random.RandomState = None,
+                 bound_control: str = "random",
+                 save_path: Union[str, None] = "./data.json",
+                 save_freq: int = 10) -> None:
 
         super().__init__(space=space,
-            crossover_prob=crossover_prob, 
-            mutation_factor=mutation_factor,
-            metric=metric,
-            mode=mode,
-            rs=rs,
-            bound_control=bound_control,
-            save_path=save_path,
-            save_freq=save_freq
-            )
-        
+                         crossover_prob=crossover_prob,
+                         mutation_factor=mutation_factor,
+                         metric=metric,
+                         mode=mode,
+                         rs=rs,
+                         bound_control=bound_control,
+                         save_path=save_path,
+                         save_freq=save_freq
+                         )
+
         self.min_budget = min_budget
         self.max_budget = max_budget
 
         self.eta = eta
-        
+
         self._all_in_one = self._get_bracket()
         self._SH_iter = len(self._all_in_one)
 
         self._genus = None
-    
+
     def _get_bracket(self):
         """Compute a full bracket of SH iteration. All brackets
         that will be executed can be extracted as a slice of full bracket.
@@ -498,7 +503,7 @@ class DEHB(DE):
         Returns:
             tuple: A sequence of tuple of the form ((n_configs, budget_per_config), ...)
         """
-        # max num of eliminations in a bracket 
+        # max num of eliminations in a bracket
         s_max = int(np.floor(np.log(self.max_budget / self.min_budget) / np.log(self.eta)))
 
         # num of downsampling left at stage i in range(s_max + 1)
@@ -510,7 +515,7 @@ class DEHB(DE):
         bracket = tuple((int(n), int(b)) for n, b in zip(n_configs, budgets))
         return bracket
 
-    def _init_eval_genus(self, obj : Callable, **kwargs):
+    def _init_eval_genus(self, obj: Callable, **kwargs):
         """Initialize and evaluate the genus. A genus is a dictiontay that holds
         every population and corresponding fitness scores mangaed by DEHB, indexed by budget.
 
@@ -518,7 +523,7 @@ class DEHB(DE):
             obj (Callable): A black-box objective funciton
 
         Returns:
-            dict: All population with budget as key. 
+            dict: All population with budget as key.
         """
         genus = dict()
 
@@ -526,16 +531,15 @@ class DEHB(DE):
             species = dict()
             species["population"] = self._init_population(pop_size)
             species["fitness"] = self._eval_population(obj, species["population"], budget, **kwargs)
-            
-            #genus[budget] = species
+
             genus[budget] = self._sort_species(species)
         return genus
-    
-    def _sort_species(self, species : dict):
+
+    def _sort_species(self, species: dict):
         """Sort the species on the basis of fitness score
 
         Args:
-            species (dict): A single population and corresponding fitness 
+            species (dict): A single population and corresponding fitness
 
         Returns:
             dict: An ordered populalation and fitness score
@@ -544,23 +548,23 @@ class DEHB(DE):
         ranking = np.argsort(species["fitness"])
         if self.mode == "max":
             ranking = ranking[::-1]
-        
+
         species["population"] = species["population"][ranking]
         species["fitness"] = species["fitness"][ranking]
 
         return species
 
-    def _select_promotions(self, target : dict, previous : dict):
+    def _select_promotions(self, target: dict, previous: dict):
         """Select the top performers from previous species to be promoted as children
         of target species. If individuals in previous already in target, then next best individual
-        in previous. 
+        in previous.
 
         Args:
             target (dict): A species associated to higher budget
             previous (dict): A species associated to lower budget
 
         Returns:
-            np.ndarray: A 2D array of shape (len(target), shape.dim) with promoted 
+            np.ndarray: A 2D array of shape (len(target), shape.dim) with promoted
                 configuration vectors.
         """
         promotions = []
@@ -570,20 +574,20 @@ class DEHB(DE):
             # If individual already in target, then ignore it to minimize fn_evals
             if np.any(np.all(individual == target["population"], axis=1)):
                 continue
-            
+
             promotions.append(individual)
-        
+
         if len(promotions) >= pop_size:
             promotions = promotions[:pop_size]
         else:
             return previous["population"][:pop_size]
             # raise BufferError("Not enough to promote")
-            # Can simply pick top pop_size many individuals even 
+            # Can simply pick top pop_size many individuals even
             # if duplicates exist in target
-        
+
         return np.asarray(promotions)
-    
-    def _get_alt_population(self, target : dict, previous : dict):
+
+    def _get_alt_population(self, target: dict, previous: dict):
         """To generate an alternate population for sampling base vectors for mutation
         operation.
 
@@ -597,10 +601,10 @@ class DEHB(DE):
         """
         # stage == 0, previous is None
         if previous is None:
-            
+
             # Edge case where stage==0, but target population too small
             # for vanilla mutation, so we need an alt_pop that is not None
-            if len(target) < self._min_pop_size :
+            if len(target) < self._min_pop_size:
                 previous = target
             else:
                 return None
@@ -613,10 +617,10 @@ class DEHB(DE):
             filler_pop = self._sample(self.global_pupulation, filler_size)
 
             alt_pop = np.concatenate([filler_pop, alt_pop])
-        
+
         return alt_pop
-    
-    def optimize(self, obj : Callable, limit : int = 10, unit : str = "iter", **kwargs):
+
+    def optimize(self, obj: Callable, limit: int = 10, unit: str = "iter", **kwargs):
         """Optimize the objective function until the specified limit is reached
 
         Args:
@@ -632,16 +636,16 @@ class DEHB(DE):
         try:
             self.genus = self._init_eval_genus(obj, **kwargs)
 
-            while True: # DEHB iteration
+            while True:  # DEHB iteration
                 self._iteration_counter += 1
 
-                for j in range(self._SH_iter): # SH iterations
-                    
+                for j in range(self._SH_iter):  # SH iterations
+
                     previous = None
                     bracket = self._all_in_one[j:]
 
-                    for stage, (pop_size, budget) in enumerate(bracket): # stages in a bracket
-                        target =  self.genus[budget]
+                    for stage, (pop_size, budget) in enumerate(bracket):  # stages in a bracket
+                        target = self.genus[budget]
 
                         # Only True for first DEHB iteration and non-inital SH stage
                         promotion = True if self._iteration_counter == 0 and stage > 0 else False
@@ -652,20 +656,22 @@ class DEHB(DE):
                             children = self._next_generation(target["population"], alt_pop)
 
                         children_fitness = self._eval_population(obj, children, budget, **kwargs)
-                        target["population"], target["fitness"] = self._selection(target["population"], children, target["fitness"], children_fitness)
+                        target["population"], target["fitness"] = self._selection(target["population"],
+                                                                                  children, target["fitness"],
+                                                                                  children_fitness)
 
                         target = self._sort_species(target)
                         self.genus[budget] = target
                         previous = target
 
-        except StopIteration :
+        except StopIteration:
             return self.inc_config
-            
+
     def _init_params(self):
         params = {
-            "min_budget" : self.min_budget,
-            "max_budget" : self.max_budget,
-            "eta"  : self.eta
+            "min_budget": self.min_budget,
+            "max_budget": self.max_budget,
+            "eta": self.eta
         }
         params.update(super()._init_params())
         return params
